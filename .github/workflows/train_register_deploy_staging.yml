@@ -34,6 +34,7 @@ jobs:
           DATA_VERSION: "dvc:v1"
         run: |
           python ml/train_and_register.py | tee train_out.json
+          cat train_out.json | jq -c '.' > train_out_single.json
           echo "result_json=$(cat train_out.json)" >> "$GITHUB_OUTPUT"
  
       - name: Evaluate gate
