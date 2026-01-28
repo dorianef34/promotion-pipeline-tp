@@ -1,73 +1,90 @@
-name: Promote to Production
-
-on:
-    workflow_dispatch:
-      inputs:
-        model_version:
-          description: "Model version to promote"
-          required: true
-jobs:
-  promote:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install MLflow
+name: Promote to Production 
+ 
+on: 
+  workflow_dispatch: 
+    inputs: 
+      model_version: 
+        description: "Model version to promote" 
+        required: true 
+ 
+jobs: 
+  promote: 
+    runs-on: ubuntu-latest 
+    steps: 
+      - uses: actions/checkout@v4 
+ 
+      - name: Set up Python 
+        uses: actions/setup-python@v5 
+        with: 
+          python-version: "3.11" 
+ 
+      - name: Install MLflow 
+        run: | 
+          pip install mlflow==2.14.3 
+ 
+      - name: Promote model version in MLflow registry 
+        env: 
+          MLFLOW_TRACKING_URI: ${{ secrets.DAGSHUB_MLFLOW_TRACKING_URI }} 
+          MLFLOW_TRACKING_TOKEN: ${{ secrets.DAGSHUB_TOKEN }} 
+          MODEL_NAME: churn-model 
+          MODEL_VERSION: ${{ inputs.model_version }} 
         run: |
-          pip install mlflow==2.14.3
-      
-      - name: Promote model version in MLflow registry
-        env:
-          MLFLOW_TRACKING_URI: ${{ secrets.DAGSHUB_MLFLOW_TRACKING_URI }}
-          MLFLOW_TRACKING_TOKEN: ${{ secrets.DAGSHUB_TOKEN }}
-          MODEL_NAME: churn-model
-          MODEL_VERSION: ${{ inputs.model_version }}
-        run: |
-          python - << 'PY'
-          import os, mlflow
+          cat > promote.py << 'EOF'
+          import os, mlflow, sys
           from mlflow.tracking import MlflowClient
           
-          mlflow.set_tracking_uri(os.environ["MLFLOW_TRACKING_URI"])
-          token = os.environ["MLFLOW_TRACKING_TOKEN"]
-          os.environ["MLFLOW_TRACKING_USERNAME"] = token
-          os.environ["MLFLOW_TRACKING_PASSWORD"] = token
+          mlflow.set_tracking_uri(os.environ['MLFLOW_TRACKING_URI'])
+          token = os.environ['MLFLOW_TRACKING_TOKEN']
+          os.environ['MLFLOW_TRACKING_USERNAME'] = token
+          os.environ['MLFLOW_TRACKING_PASSWORD'] = token
           
           client = MlflowClient()
-          name = os.environ["MODEL_NAME"]
-          version = os.environ["MODEL_VERSION"]
-    
-          # Transition version to Production (optionally archive existing)
-          client.transition_model_version_stage(
-            name=name,
-            version=version,
-            stage="Production",
-            archive_existing_versions=True
-          )
-          print(f"Promoted {name} v{version} to Production")
-          PY
-
-  deploy_production:
-    needs: promote
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Build + push backend image (production)
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: |
-          echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME"
-          --password-stdin
-          docker build -t "$DOCKERHUB_USERNAME/churn-backend:production"
-          backend
-          docker push "$DOCKERHUB_USERNAME/churn-backend:production"
-    
-      - name: Deploy to production (placeholder)
-        run: |
-          echo "Deploy step placeholder: run docker-compose on production
-          host."
+          name = os.environ['MODEL_NAME']
+          version = os.environ['MODEL_VERSION']
+          
+          # List all versions to check if target version exists
+          try:
+              all_versions = client.search_model_versions(f"name='{name}'")
+              print(f"Available versions for {name}:")
+              for mv in all_versions:
+                  print(f"  - Version {mv.version} (Stage: {mv.current_stage})")
+              
+              # Check if requested version exists
+              version_exists = any(mv.version == version for mv in all_versions)
+              if not version_exists:
+                  print(f"ERROR: Version {version} does not exist for model {name}")
+                  print(f"Available versions: {[mv.version for mv in all_versions]}")
+                  sys.exit(1)
+              
+              # Transition version to Production
+              client.transition_model_version_stage(
+                  name=name,
+                  version=version,
+                  stage='Production',
+                  archive_existing_versions=True
+              )
+              print(f"✓ Promoted {name} v{version} to Production")
+          except Exception as e:
+              print(f"ERROR: {e}")
+              sys.exit(1)
+          EOF
+          python promote.py 
+ 
+  deploy_production: 
+    needs: promote 
+    runs-on: ubuntu-latest 
+    steps: 
+      - uses: actions/checkout@v4 
+ 
+      - name: Build + push backend image (production) 
+        env: 
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }} 
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }} 
+        run: | 
+          echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin 
+          docker build -t "$DOCKERHUB_USERNAME/churn-backend:production" backend 
+          docker push "$DOCKERHUB_USERNAME/churn-backend:production" 
+ 
+      - name: Deploy to production (placeholder) 
+        run: | 
+          echo "Deploy step placeholder: run docker-compose on production host."
