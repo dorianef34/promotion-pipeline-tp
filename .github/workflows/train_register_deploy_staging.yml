@@ -34,7 +34,8 @@ jobs:
           DATA_VERSION: "dvc:v1" # in a real repo: derive from `dvc.lock` or commit hash
  
         run: |
-          python ml/train_and_register.py | tee train_out.json
+          python ml/train_and_register.py > train_out.json 2>&1
+          cat train_out.json  # Affiche tout dans les logs
           echo "result_json=$(cat train_out.json)" >> "$GITHUB_OUTPUT"
 
       - name: Debug JSON
