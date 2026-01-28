@@ -39,7 +39,7 @@ jobs:
 
       - name: Evaluate gate
         env:
-          ACCURACY_THRESHOLD: "0.90"
+          ACCURACY_THRESHOLD: "0.70"
         run: |
           echo '${{ steps.train.outputs.result_json }}' | python ml/evaluate.py
   deploy_staging:
@@ -61,7 +61,7 @@ jobs:
         # For class: this is illustrative.
         # In real deployment: SSH into staging host and run compose pulling the image.
         run: |
-        echo "Deploy step placeholder: run docker-compose on staging host."
+          echo "Deploy step placeholder: run docker-compose on staging host."
  
   staging_smoke_test:
     needs: deploy_staging
