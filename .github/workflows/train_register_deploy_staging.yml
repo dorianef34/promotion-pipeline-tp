@@ -36,12 +36,12 @@ jobs:
           python ml/train_and_register.py | tee train_out.json 
           echo "result_json=$(cat train_out.json)" >> "$GITHUB_OUTPUT" 
  
-      - name: Evaluate gate 
-        env: 
-          ACCURACY_THRESHOLD: "0.70" 
-        run: | 
-          echo '${{ steps.train.outputs.result_json }}' | python ml/evaluate.py 
- 
+      - name: Evaluate gate
+        env:
+          ACCURACY_THRESHOLD: "0.70"
+        run: |
+          python ml/evaluate.py "$(cat train_out.json | jq -c '.')"
+
   deploy_staging: 
     needs: train_register 
     runs-on: ubuntu-latest 
